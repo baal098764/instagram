@@ -47,7 +47,7 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
 
     # 2) Determine target URL
     if tab == "posts":
-        target_url = f"https://www.instagram.com/{identifier}/"
+        target_url = f"https://www.instagram.com/{identifier}/posts"
     elif tab == "stories":
         target_url = f"https://www.instagram.com/stories/{identifier}/"
     elif tab == "reels":
