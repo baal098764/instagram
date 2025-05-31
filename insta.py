@@ -4,12 +4,10 @@ import tempfile
 import shutil
 import os
 import json
-import zipfile
 from pathlib import Path
-from io import BytesIO
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helper Functions for Gallery-dl Integration
+# Helper Functions for Gallery-dl URL Extraction
 # ──────────────────────────────────────────────────────────────────────────────
 
 def write_gallerydl_config(sessionid: str) -> Path:
@@ -33,11 +31,11 @@ def write_gallerydl_config(sessionid: str) -> Path:
     cfg_path.write_text(json.dumps(config_data, indent=2))
     return cfg_path
 
-def run_gallerydl(identifier: str, tab: str, sessionid: str, max_items: int = 100):
+def get_media_urls(identifier: str, tab: str, sessionid: str, max_items: int = 100) -> list[str]:
     """
-    Run gallery-dl for the given Instagram identifier and tab, using the provided sessionid.
-    Returns a tuple of (download_dir: Path, stdout: str, stderr: str).
-
+    Use gallery-dl to fetch media URLs (instead of downloading).
+    Returns a list of direct media URLs (e.g., image/video links).
+    
     - identifier:
         • For "posts", "stories", "reels", "tagged": an Instagram username (without '@').
         • For "highlights" or "url": a full Instagram URL (e.g., highlight, post, reel, story).
@@ -48,7 +46,7 @@ def run_gallerydl(identifier: str, tab: str, sessionid: str, max_items: int = 10
     # 1) Build gallery-dl config
     cfg_path = write_gallerydl_config(sessionid)
 
-    # 2) Determine the target URL
+    # 2) Determine target URL
     if tab == "posts":
         target_url = f"https://www.instagram.com/{identifier}/"
     elif tab == "stories":
@@ -62,74 +60,62 @@ def run_gallerydl(identifier: str, tab: str, sessionid: str, max_items: int = 10
     else:
         raise ValueError("Invalid tab: must be one of ['posts','stories','reels','highlights','tagged','url']")
 
-    # 3) Prepare download directory
-    if tab == "highlights":
-        download_dir = Path(tempfile.gettempdir()) / f"ig_highlight_{hash(identifier)}"
-    elif tab == "url":
-        download_dir = Path(tempfile.gettempdir()) / f"ig_url_{hash(identifier)}"
-    else:
-        # For posts, stories, reels, tagged
-        download_dir = Path(tempfile.gettempdir()) / f"ig_{identifier}_{tab}"
-
-    if download_dir.exists():
-        shutil.rmtree(download_dir)
-    download_dir.mkdir(parents=True, exist_ok=True)
-
-    # 4) Build gallery-dl command
+    # 3) Build gallery-dl command to print JSON instead of downloading
     cmd = [
         "gallery-dl",
         "--config", str(cfg_path),
-        "--destination", str(download_dir) + "/",
-        "--verbose"
+        "--print-json",
+        target_url
     ]
-    # Only apply a range filter for posts, reels, tagged
     if tab in ["posts", "reels", "tagged"]:
-        cmd += ["--range", f"0-{max_items}"]
+        cmd.insert(-1, "--range")
+        cmd.insert(-1, f"0-{max_items}")
 
-    cmd.append(target_url)
-
-    # 5) Execute gallery-dl
+    # 4) Run gallery-dl, capture JSON lines
     proc = subprocess.run(cmd, capture_output=True, text=True)
-    stdout, stderr = proc.stdout, proc.stderr
+    stdout = proc.stdout
+    stderr = proc.stderr
+
     if proc.returncode != 0:
-        raise RuntimeError(f"Download failed (exit {proc.returncode}):\n{stderr}")
+        raise RuntimeError(f"gallery-dl failed (exit {proc.returncode}):\n{stderr}")
 
-    return download_dir, stdout, stderr
+    # 5) Parse JSON output, extract media URLs
+    urls = []
+    for line in stdout.splitlines():
+        try:
+            entry = json.loads(line)
+            # gallery-dl JSON entries often have a key "urls" (list of media URLs)
+            if "urls" in entry and isinstance(entry["urls"], list):
+                for u in entry["urls"]:
+                    urls.append(u)
+            # fallback: if entry has key "url" that points to media
+            elif "url" in entry:
+                urls.append(entry["url"])
+        except json.JSONDecodeError:
+            continue
 
-def list_downloaded_media(download_dir: Path) -> list[Path]:
-    """
-    Return a sorted list of Path objects for each file in download_dir and its subdirectories.
-    """
-    if not download_dir.exists():
-        return []
-    return sorted(p for p in download_dir.rglob("*") if p.is_file())
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_urls = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            unique_urls.append(u)
 
-def create_zip_buffer(file_paths: list[Path]) -> BytesIO:
-    """
-    Given a list of Path objects, create an in-memory ZIP (BytesIO) containing them.
-    """
-    buffer = BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file_path in file_paths:
-            zf.write(file_path, arcname=file_path.name)
-    buffer.seek(0)
-    return buffer
+    return unique_urls
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Set page config with a custom favicon (tab icon)
+# Set page config with Instagram-style favicon
 st.set_page_config(
     page_title="Instagram Downloader",
     page_icon="https://www.freepngimg.com/download/computer/68394-computer-instagram-icons-png-file-hd.png",
     layout="centered",
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Sidebar: Instructions & Disclaimer
-# ──────────────────────────────────────────────────────────────────────────────
-
+# Sidebar instructions & disclaimer
 st.sidebar.header("How to Obtain Your Instagram Session ID")
 st.sidebar.markdown(
     """
@@ -155,11 +141,8 @@ st.sidebar.markdown(
     """
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Main App Content
-# ──────────────────────────────────────────────────────────────────────────────
-
-st.title("📸 Instagram Downloader")
+# Main app title
+st.title("📸 Instagram Downloader (URLs Only)")
 
 # Store sessionid in session state
 if "sessionid" not in st.session_state:
@@ -174,16 +157,13 @@ with st.expander("🔑 Enter your Instagram sessionid"):
         key="input_sessionid",
     )
     if not st.session_state.sessionid:
-        st.warning("A valid sessionid is required to download private or rate-limited content.")
+        st.warning("A valid sessionid is required to fetch URLs from private or rate-limited content.")
     else:
         st.success("Session ID saved.")
 
 st.markdown("---")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Tabs: Posts, Stories, Reels, Highlights, Tagged Posts, URL Input
-# ──────────────────────────────────────────────────────────────────────────────
-
+# Define tab labels with emojis
 tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs(
     ["🖼️ Posts", "📖 Stories", "🎞️ Reels", "✨ Highlights", "🏷️ Tagged Posts", "🔗 URL Input"]
 )
@@ -192,7 +172,7 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
 # Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_posts:
-    st.subheader("Download User Posts")
+    st.subheader("Fetch URLs of User Posts")
     with st.form(key="posts_form"):
         username_posts = st.text_input(
             "Instagram Username (for Posts)",
@@ -202,57 +182,27 @@ with tab_posts:
         max_posts = st.slider(
             "Max Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent posts to download."
+            help="Limits how many most recent posts to retrieve URLs for."
         )
-        submit_posts = st.form_submit_button(label="Fetch Posts")
+        submit_posts = st.form_submit_button(label="Get Post URLs")
 
     if submit_posts:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_posts:
-            st.error("Please enter a username to download their posts.")
+            st.error("Please enter a username to fetch their post URLs.")
         else:
-            status_msg = st.info(f"⏳ Downloading posts for @{username_posts} ...")
+            status_msg = st.info(f"⏳ Fetching post URLs for @{username_posts} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    username_posts, "posts", st.session_state.sessionid, max_posts
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(username_posts, "posts", st.session_state.sessionid, max_posts)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No posts were downloaded. "
-                        "Check the username and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the username and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} posts for @{username_posts}.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"{username_posts}_posts_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} post media URLs for @{username_posts}.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
@@ -264,62 +214,32 @@ with tab_posts:
 # Stories Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_stories:
-    st.subheader("Download User Stories")
+    st.subheader("Fetch URLs of User Stories")
     with st.form(key="stories_form"):
         username_stories = st.text_input(
             "Instagram Username (for Stories)",
             placeholder="e.g., natgeo",
             key="username_stories"
         )
-        submit_stories = st.form_submit_button(label="Fetch Stories")
+        submit_stories = st.form_submit_button(label="Get Story URLs")
 
     if submit_stories:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_stories:
-            st.error("Please enter a username to download their stories.")
+            st.error("Please enter a username to fetch their story URLs.")
         else:
-            status_msg = st.info(f"⏳ Downloading stories for @{username_stories} ...")
+            status_msg = st.info(f"⏳ Fetching story URLs for @{username_stories} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    username_stories, "stories", st.session_state.sessionid
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(username_stories, "stories", st.session_state.sessionid)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No stories were downloaded. "
-                        "Check the username and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the username and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} stories for @{username_stories}.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"{username_stories}_stories_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} story media URLs for @{username_stories}.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
@@ -331,7 +251,7 @@ with tab_stories:
 # Reels Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_reels:
-    st.subheader("Download User Reels")
+    st.subheader("Fetch URLs of User Reels")
     with st.form(key="reels_form"):
         username_reels = st.text_input(
             "Instagram Username (for Reels)",
@@ -341,57 +261,27 @@ with tab_reels:
         max_reels = st.slider(
             "Max Reels to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent reels to download."
+            help="Limits how many most recent reels to retrieve URLs for."
         )
-        submit_reels = st.form_submit_button(label="Fetch Reels")
+        submit_reels = st.form_submit_button(label="Get Reel URLs")
 
     if submit_reels:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_reels:
-            st.error("Please enter a username to download their reels.")
+            st.error("Please enter a username to fetch their reel URLs.")
         else:
-            status_msg = st.info(f"⏳ Downloading reels for @{username_reels} ...")
+            status_msg = st.info(f"⏳ Fetching reel URLs for @{username_reels} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    username_reels, "reels", st.session_state.sessionid, max_reels
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(username_reels, "reels", st.session_state.sessionid, max_reels)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No reels were downloaded. "
-                        "Check the username and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the username and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} reels for @{username_reels}.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"{username_reels}_reels_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} reel media URLs for @{username_reels}.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
@@ -403,15 +293,15 @@ with tab_reels:
 # Highlights Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_highlights:
-    st.subheader("Download Highlights")
+    st.subheader("Fetch URLs of Highlights")
     with st.form(key="highlights_form"):
         highlights_url = st.text_input(
             "Instagram Highlight URL",
             placeholder="e.g., https://www.instagram.com/stories/highlights/1234567890/",
-            help="Paste the full URL of the Instagram Highlight you want to download.",
+            help="Paste the full URL of the Instagram Highlight you want to fetch URLs from.",
             key="highlight_url"
         )
-        submit_highlights = st.form_submit_button(label="Fetch Highlights")
+        submit_highlights = st.form_submit_button(label="Get Highlight URLs")
 
     if submit_highlights:
         if not st.session_state.sessionid:
@@ -419,47 +309,17 @@ with tab_highlights:
         elif not highlights_url:
             st.error("Please enter a valid Instagram Highlight URL.")
         else:
-            status_msg = st.info(f"⏳ Downloading highlight from: {highlights_url} ...")
+            status_msg = st.info(f"⏳ Fetching highlight URLs from: {highlights_url} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    highlights_url, "highlights", st.session_state.sessionid
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(highlights_url, "highlights", st.session_state.sessionid)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No media files were downloaded. "
-                        "Check the highlight URL and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the highlight URL and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} files from the highlight.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"highlight_{hash(highlights_url)}_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} highlight media URLs.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
@@ -471,7 +331,7 @@ with tab_highlights:
 # Tagged Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_tagged:
-    st.subheader("Download Tagged Posts")
+    st.subheader("Fetch URLs of Tagged Posts")
     with st.form(key="tagged_form"):
         username_tagged = st.text_input(
             "Instagram Username (for Tagged Posts)",
@@ -481,57 +341,27 @@ with tab_tagged:
         max_tagged = st.slider(
             "Max Tagged Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent tagged posts to download."
+            help="Limits how many most recent tagged posts to retrieve URLs for."
         )
-        submit_tagged = st.form_submit_button(label="Fetch Tagged Posts")
+        submit_tagged = st.form_submit_button(label="Get Tagged Post URLs")
 
     if submit_tagged:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_tagged:
-            st.error("Please enter a username to download their tagged posts.")
+            st.error("Please enter a username to fetch their tagged post URLs.")
         else:
-            status_msg = st.info(f"⏳ Downloading tagged posts for @{username_tagged} ...")
+            status_msg = st.info(f"⏳ Fetching tagged post URLs for @{username_tagged} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    username_tagged, "tagged", st.session_state.sessionid, max_tagged
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(username_tagged, "tagged", st.session_state.sessionid, max_tagged)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No tagged posts were downloaded. "
-                        "Check the username and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the username and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} tagged posts for @{username_tagged}.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"{username_tagged}_tagged_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} tagged post media URLs for @{username_tagged}.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
@@ -543,7 +373,7 @@ with tab_tagged:
 # URL Input Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_url:
-    st.subheader("Download from Custom URL")
+    st.subheader("Fetch URLs from Custom URL")
     with st.form(key="url_form"):
         custom_url = st.text_input(
             "Instagram URL",
@@ -551,7 +381,7 @@ with tab_url:
             help="Paste any valid Instagram URL (post, story, reel, highlight, profile, etc.).",
             key="custom_url"
         )
-        submit_url = st.form_submit_button(label="Fetch from URL")
+        submit_url = st.form_submit_button(label="Get Media URLs")
 
     if submit_url:
         if not st.session_state.sessionid:
@@ -559,47 +389,17 @@ with tab_url:
         elif not custom_url:
             st.error("Please enter a valid Instagram URL.")
         else:
-            status_msg = st.info(f"⏳ Downloading media from: {custom_url} ...")
+            status_msg = st.info(f"⏳ Fetching media URLs from: {custom_url} ...")
             try:
-                download_dir, stdout, stderr = run_gallerydl(
-                    custom_url, "url", st.session_state.sessionid
-                )
-                media_files = list_downloaded_media(download_dir)
+                urls = get_media_urls(custom_url, "url", st.session_state.sessionid)
+                status_msg.empty()
 
-                if not media_files:
-                    status_msg.empty()
-                    st.warning(
-                        "No media files were downloaded. "
-                        "Check the URL and sessionid, then try again."
-                    )
-                    st.code(
-                        "gallery-dl stdout:\n" + stdout + "\n\nstderr:\n" + stderr,
-                        language="bash"
-                    )
+                if not urls:
+                    st.warning("No URLs found. Check the URL and sessionid, then try again.")
                 else:
-                    status_msg.empty()
-                    st.success(f"✅ Downloaded {len(media_files)} files from the URL.")
-
-                    cols = st.columns(3)
-                    for idx, file_path in enumerate(media_files):
-                        col = cols[idx % 3]
-                        ext = file_path.suffix.lower()
-                        if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                            col.image(str(file_path), use_container_width=True)
-                        elif ext in [".mp4", ".mov", ".gifv"]:
-                            col.video(str(file_path), format="video/mp4")
-                        else:
-                            col.write(f"File: {file_path.name}")
-
-                    zip_buffer = create_zip_buffer(media_files)
-                    zip_name = f"url_{hash(custom_url)}_media.zip"
-                    st.download_button(
-                        label="💾 Download All as ZIP",
-                        data=zip_buffer,
-                        file_name=zip_name,
-                        mime="application/zip"
-                    )
-
+                    st.success(f"✅ Found {len(urls)} media URLs from the provided URL.")
+                    for u in urls:
+                        st.markdown(f"- [Link]({u})")
             except RuntimeError as e:
                 status_msg.empty()
                 st.error(f"Error: {e}")
