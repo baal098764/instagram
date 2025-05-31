@@ -113,6 +113,15 @@ def create_zip_buffer(file_paths: list[Path]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
+def clear_downloaded_folder(download_dir: Path) -> bool:
+    """
+    If the folder exists, delete it and return True. Otherwise return False.
+    """
+    if download_dir.exists():
+        shutil.rmtree(download_dir)
+        return True
+    return False
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
@@ -185,16 +194,6 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
     ["🖼️ Posts", "📖 Stories", "🎞️ Reels", "✨ Highlights", "🏷️ Tagged Posts", "🔗 URL Input"]
 )
 
-# Utility to show “Clear Media” button and handle deletion
-def clear_downloaded_folder(download_dir: Path):
-    """
-    If the folder exists, delete it and confirm to the user.
-    """
-    if download_dir.exists():
-        shutil.rmtree(download_dir)
-        return True
-    return False
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
@@ -219,7 +218,7 @@ with tab_posts:
         elif not username_posts:
             st.error("Please enter a username to download their posts.")
         else:
-            status_msg = st.info(f"⏳ Downloading posts for @{username_posts} ...")
+            status_msg = st.info(f"⏳ Downloading posts for @{username_posts} …")
             try:
                 download_dir = run_gallerydl(
                     username_posts, "posts", st.session_state.sessionid, max_posts
@@ -232,11 +231,11 @@ with tab_posts:
                         "No posts were downloaded. "
                         "Check the username and sessionid, then try again."
                     )
-                    return  # exit early
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} posts for @{username_posts}.")
 
-                # Instead of previewing, simply list filenames with individual download buttons
+                # Show each file with its own Download button
                 st.markdown("#### 📂 Downloaded Files")
                 for file_path in media_files:
                     file_name = file_path.name
@@ -249,7 +248,7 @@ with tab_posts:
                         mime="application/octet-stream"
                     )
 
-                # Also provide a ZIP download for convenience
+                # ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_posts}_posts_media.zip"
                 st.download_button(
@@ -293,7 +292,7 @@ with tab_stories:
         elif not username_stories:
             st.error("Please enter a username to download their stories.")
         else:
-            status_msg = st.info(f"⏳ Downloading stories for @{username_stories} ...")
+            status_msg = st.info(f"⏳ Downloading stories for @{username_stories} …")
             try:
                 download_dir = run_gallerydl(
                     username_stories, "stories", st.session_state.sessionid
@@ -306,7 +305,7 @@ with tab_stories:
                         "No stories were downloaded. "
                         "Check the username and sessionid, then try again."
                     )
-                    return
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} stories for @{username_stories}.")
 
@@ -369,7 +368,7 @@ with tab_reels:
         elif not username_reels:
             st.error("Please enter a username to download their reels.")
         else:
-            status_msg = st.info(f"⏳ Downloading reels for @{username_reels} ...")
+            status_msg = st.info(f"⏳ Downloading reels for @{username_reels} …")
             try:
                 download_dir = run_gallerydl(
                     username_reels, "reels", st.session_state.sessionid, max_reels
@@ -382,7 +381,7 @@ with tab_reels:
                         "No reels were downloaded. "
                         "Check the username and sessionid, then try again."
                     )
-                    return
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} reels for @{username_reels}.")
 
@@ -441,7 +440,7 @@ with tab_highlights:
         elif not highlights_url:
             st.error("Please enter a valid Instagram Highlight URL.")
         else:
-            status_msg = st.info(f"⏳ Downloading highlight from: {highlights_url} ...")
+            status_msg = st.info(f"⏳ Downloading highlight from: {highlights_url} …")
             try:
                 download_dir = run_gallerydl(
                     highlights_url, "highlights", st.session_state.sessionid
@@ -454,7 +453,7 @@ with tab_highlights:
                         "No media files were downloaded. "
                         "Check the highlight URL and sessionid, then try again."
                     )
-                    return
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} files from the highlight.")
 
@@ -517,7 +516,7 @@ with tab_tagged:
         elif not username_tagged:
             st.error("Please enter a username to download their tagged posts.")
         else:
-            status_msg = st.info(f"⏳ Downloading tagged posts for @{username_tagged} ...")
+            status_msg = st.info(f"⏳ Downloading tagged posts for @{username_tagged} …")
             try:
                 download_dir = run_gallerydl(
                     username_tagged, "tagged", st.session_state.sessionid, max_tagged
@@ -530,7 +529,7 @@ with tab_tagged:
                         "No tagged posts were downloaded. "
                         "Check the username and sessionid, then try again."
                     )
-                    return
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} tagged posts for @{username_tagged}.")
 
@@ -589,7 +588,7 @@ with tab_url:
         elif not custom_url:
             st.error("Please enter a valid Instagram URL.")
         else:
-            status_msg = st.info(f"⏳ Downloading media from: {custom_url} ...")
+            status_msg = st.info(f"⏳ Downloading media from: {custom_url} …")
             try:
                 download_dir = run_gallerydl(
                     custom_url, "url", st.session_state.sessionid
@@ -602,7 +601,7 @@ with tab_url:
                         "No media files were downloaded. "
                         "Check the URL and sessionid, then try again."
                     )
-                    return
+                    st.stop()
 
                 st.success(f"✅ Downloaded {len(media_files)} files from the URL.")
 
