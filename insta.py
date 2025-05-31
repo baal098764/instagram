@@ -10,7 +10,7 @@ from pathlib import Path
 from io import BytesIO
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helper Functions for Gallery‐dl Integration
+# Helper Functions for Gallery-dl Integration
 # ──────────────────────────────────────────────────────────────────────────────
 
 def write_gallerydl_config(sessionid: str) -> Path:
@@ -122,6 +122,32 @@ def clear_downloaded_folder(download_dir: Path) -> bool:
         return True
     return False
 
+def is_video_file(file_path: Path) -> bool:
+    """
+    Return True if the local file’s extension indicates a video.
+    """
+    ext = file_path.suffix.lower()
+    return ext in [".mp4", ".mov", ".gifv", ".webm", ".mkv", ".avi"]
+
+def display_media_grid_from_paths(file_paths: list[Path], n_cols: int = 3):
+    """
+    Given a list of local Paths, display them in a grid of n_cols columns per row.
+    Uses st.columns() and calls st.image(...) or st.video(...) with use_container_width=True.
+    """
+    if not file_paths:
+        return
+    for i in range(0, len(file_paths), n_cols):
+        chunk = file_paths[i : i + n_cols]
+        cols = st.columns(len(chunk))
+        for col, path in zip(cols, chunk):
+            try:
+                if is_video_file(path):
+                    col.video(str(path), format="video/mp4", use_container_width=True)
+                else:
+                    col.image(str(path), use_container_width=True)
+            except Exception as e:
+                col.write(f"⚠️ Could not display {path.name}: {e}")
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
@@ -180,7 +206,7 @@ with st.expander("🔑 Enter your Instagram sessionid"):
         key="input_sessionid",
     )
     if not st.session_state.sessionid:
-        st.warning("A valid sessionid is required to download private or rate-limited content.")
+        st.warning("A valid sessionid is required to download and display private or rate-limited content.")
     else:
         st.success("Session ID saved.")
 
@@ -198,7 +224,7 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
 # Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_posts:
-    st.subheader("Download User Posts")
+    st.subheader("Download & Display User Posts (Grid View)")
     with st.form(key="posts_form"):
         username_posts = st.text_input(
             "Instagram Username (for Posts)",
@@ -208,7 +234,7 @@ with tab_posts:
         max_posts = st.slider(
             "Max Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent posts to download."
+            help="Limits how many of the most recent posts to download."
         )
         submit_posts = st.form_submit_button(label="Fetch Posts")
 
@@ -235,8 +261,11 @@ with tab_posts:
 
                 st.success(f"✅ Downloaded {len(media_files)} posts for @{username_posts}.")
 
-                # Show each file with its own Download button
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -248,7 +277,7 @@ with tab_posts:
                         mime="application/octet-stream"
                     )
 
-                # ZIP download for convenience
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_posts}_posts_media.zip"
                 st.download_button(
@@ -258,7 +287,7 @@ with tab_posts:
                     mime="application/zip"
                 )
 
-                # “Clear Media” button to remove files from server storage
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Posts"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -277,7 +306,7 @@ with tab_posts:
 # Stories Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_stories:
-    st.subheader("Download User Stories")
+    st.subheader("Download & Display User Stories (Grid View)")
     with st.form(key="stories_form"):
         username_stories = st.text_input(
             "Instagram Username (for Stories)",
@@ -309,7 +338,11 @@ with tab_stories:
 
                 st.success(f"✅ Downloaded {len(media_files)} stories for @{username_stories}.")
 
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -321,6 +354,7 @@ with tab_stories:
                         mime="application/octet-stream"
                     )
 
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_stories}_stories_media.zip"
                 st.download_button(
@@ -330,6 +364,7 @@ with tab_stories:
                     mime="application/zip"
                 )
 
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Stories"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -348,7 +383,7 @@ with tab_stories:
 # Reels Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_reels:
-    st.subheader("Download User Reels")
+    st.subheader("Download & Display User Reels (Grid View)")
     with st.form(key="reels_form"):
         username_reels = st.text_input(
             "Instagram Username (for Reels)",
@@ -358,7 +393,7 @@ with tab_reels:
         max_reels = st.slider(
             "Max Reels to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent reels to download."
+            help="Limits how many of the most recent reels to download."
         )
         submit_reels = st.form_submit_button(label="Fetch Reels")
 
@@ -385,7 +420,11 @@ with tab_reels:
 
                 st.success(f"✅ Downloaded {len(media_files)} reels for @{username_reels}.")
 
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -397,6 +436,7 @@ with tab_reels:
                         mime="application/octet-stream"
                     )
 
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_reels}_reels_media.zip"
                 st.download_button(
@@ -406,6 +446,7 @@ with tab_reels:
                     mime="application/zip"
                 )
 
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Reels"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -424,7 +465,7 @@ with tab_reels:
 # Highlights Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_highlights:
-    st.subheader("Download Highlights")
+    st.subheader("Download & Display Highlights (Grid View)")
     with st.form(key="highlights_form"):
         highlights_url = st.text_input(
             "Instagram Highlight URL",
@@ -457,7 +498,11 @@ with tab_highlights:
 
                 st.success(f"✅ Downloaded {len(media_files)} files from the highlight.")
 
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -469,6 +514,7 @@ with tab_highlights:
                         mime="application/octet-stream"
                     )
 
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"highlight_{hash(highlights_url)}_media.zip"
                 st.download_button(
@@ -478,6 +524,7 @@ with tab_highlights:
                     mime="application/zip"
                 )
 
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Highlights"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -496,7 +543,7 @@ with tab_highlights:
 # Tagged Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_tagged:
-    st.subheader("Download Tagged Posts")
+    st.subheader("Download & Display Tagged Posts (Grid View)")
     with st.form(key="tagged_form"):
         username_tagged = st.text_input(
             "Instagram Username (for Tagged Posts)",
@@ -506,7 +553,7 @@ with tab_tagged:
         max_tagged = st.slider(
             "Max Tagged Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limits how many most recent tagged posts to download."
+            help="Limits how many of the most recent tagged posts to download."
         )
         submit_tagged = st.form_submit_button(label="Fetch Tagged Posts")
 
@@ -533,7 +580,11 @@ with tab_tagged:
 
                 st.success(f"✅ Downloaded {len(media_files)} tagged posts for @{username_tagged}.")
 
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -545,6 +596,7 @@ with tab_tagged:
                         mime="application/octet-stream"
                     )
 
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_tagged}_tagged_media.zip"
                 st.download_button(
@@ -554,12 +606,13 @@ with tab_tagged:
                     mime="application/zip"
                 )
 
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Tagged Posts"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
-                        st.success("All downloaded tagged‐post files have been cleared from server storage.")
+                        st.success("All downloaded tagged-post files have been cleared from server storage.")
                     else:
-                        st.warning("No downloaded tagged‐post folder found to clear.")
+                        st.warning("No downloaded tagged-post folder found to clear.")
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -572,7 +625,7 @@ with tab_tagged:
 # URL Input Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_url:
-    st.subheader("Download from Custom URL")
+    st.subheader("Download & Display from Custom URL (Grid View)")
     with st.form(key="url_form"):
         custom_url = st.text_input(
             "Instagram URL",
@@ -605,7 +658,11 @@ with tab_url:
 
                 st.success(f"✅ Downloaded {len(media_files)} files from the URL.")
 
-                st.markdown("#### 📂 Downloaded Files")
+                # 1) Display media grid
+                display_media_grid_from_paths(media_files, n_cols=3)
+
+                # 2) Provide individual Download buttons
+                st.markdown("#### 📂 Download Options")
                 for file_path in media_files:
                     file_name = file_path.name
                     with open(file_path, "rb") as f:
@@ -617,6 +674,7 @@ with tab_url:
                         mime="application/octet-stream"
                     )
 
+                # 3) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"url_{hash(custom_url)}_media.zip"
                 st.download_button(
@@ -626,6 +684,7 @@ with tab_url:
                     mime="application/zip"
                 )
 
+                # 4) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded URL Media"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
