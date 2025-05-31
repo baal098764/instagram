@@ -119,10 +119,10 @@ def create_zip_buffer(file_paths: list[Path]) -> BytesIO:
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Here is the only change: add page_icon to set the favicon
+# Add custom favicon for browser tab
 st.set_page_config(
     page_title="Instagram Downloader",
-    page_icon="https://th.bing.com/th/id/OIP.jPmHyBfNRs_TTPat6HyprQHaHa?rs=1&pid=ImgDetMain",  # <- replace with your actual icon URL
+    page_icon="https://example.com/path/to/your-favicon.png",  # Replace with your icon URL or file path
     layout="centered",
 )
 
@@ -181,27 +181,12 @@ with st.expander("🔑 Enter your Instagram sessionid"):
 st.markdown("---")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Icons (replace these URLs with actual icon image URLs)
-# ──────────────────────────────────────────────────────────────────────────────
-icon_posts      = "https://example.com/icons/posts.png"
-icon_stories    = "https://example.com/icons/stories.png"
-icon_reels      = "https://example.com/icons/reels.png"
-icon_highlights = "https://example.com/icons/highlights.png"
-icon_tagged     = "https://example.com/icons/tagged.png"
-icon_url        = "https://example.com/icons/url.png"
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Tabs: Posts, Stories, Reels, Highlights, Tagged Posts, URL Input
 # ──────────────────────────────────────────────────────────────────────────────
-tab_labels = [
-    f"![Posts]({icon_posts}) Posts",
-    f"![Stories]({icon_stories}) Stories",
-    f"![Reels]({icon_reels}) Reels",
-    f"![Highlights]({icon_highlights}) Highlights",
-    f"![Tagged]({icon_tagged}) Tagged Posts",
-    f"![URL]({icon_url}) URL Input"
-]
-tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs(tab_labels)
+
+tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs(
+    ["Posts", "Stories", "Reels", "Highlights", "Tagged Posts", "URL Input"]
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Posts Tab
