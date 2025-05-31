@@ -264,7 +264,7 @@ with tab_posts:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_posts}_posts_media.zip"
                 st.download_button(
@@ -328,7 +328,7 @@ with tab_stories:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_stories}_stories_media.zip"
                 st.download_button(
@@ -397,7 +397,7 @@ with tab_reels:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_reels}_reels_media.zip"
                 st.download_button(
@@ -462,7 +462,7 @@ with tab_highlights:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"highlight_{hash(highlights_url)}_media.zip"
                 st.download_button(
@@ -531,7 +531,7 @@ with tab_tagged:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_tagged}_tagged_media.zip"
                 st.download_button(
@@ -596,7 +596,7 @@ with tab_url:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) ZIP download for convenience
+                # 2) ZIP download for convenience (only “Download All”)
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"url_{hash(custom_url)}_media.zip"
                 st.download_button(
