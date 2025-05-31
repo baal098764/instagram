@@ -38,7 +38,7 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
 
     - identifier:
         • For "posts", "stories", "reels", "tagged": an Instagram username (without '@').
-        • For "highlights" or "url": a full Instagram URL (post/reel/highlight/story).
+        • For "highlights" or "url": a full Instagram URL (post/ reel/ highlight).
     - tab: one of ["posts", "stories", "reels", "highlights", "tagged", "url"]
     - sessionid: Instagram sessionid cookie string
     - max_items: only used when tab in ["posts", "reels", "tagged"]
@@ -65,8 +65,8 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
     cmd = [
         "gallery-dl",
         "--config", str(cfg_path),
-        "--get-url",
-        "--verbose"
+        "--get-url",        # <-- print direct media URLs instead of downloading
+        "--verbose"         # optional, can be omitted if you don't need debug output
     ]
     # Only apply a range filter for “posts”, “reels”, “tagged”
     if tab in ["posts", "reels", "tagged"]:
@@ -82,15 +82,15 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
         # If gallery-dl fails, propagate an error
         raise RuntimeError(f"gallery-dl failed (exit {proc.returncode}):\n{stderr}")
 
-    # 5) Parse stdout: gallery-dl prints one URL (or directive) per line
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    return lines
+    # 5) Parse stdout: gallery-dl prints one URL per line
+    urls = [line.strip() for line in stdout.splitlines() if line.strip()]
+    return urls
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Set page config with a custom favicon (browser‐tab icon)
+# Add custom favicon (browser‐tab icon)
 st.set_page_config(
     page_title="Instagram Downloader (URL Only)",
     page_icon="https://www.freepngimg.com/download/computer/68394-computer-instagram-icons-png-file-hd.png",
@@ -158,41 +158,11 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
     ["🖼️ Posts", "📖 Stories", "🎞️ Reels", "✨ Highlights", "🏷️ Tagged Posts", "🔗 URL Input"]
 )
 
-def is_video_url(url: str) -> bool:
-    """
-    Naively check if a URL points to a video by inspecting known video extensions.
-    """
-    return any(ext in url.lower() for ext in [".mp4", ".mov", ".gifv", ".webm"])
-
-def filter_media_urls(lines: list[str]) -> tuple[list[str], int]:
-    """
-    Given a list of lines returned by run_gallerydl_urls, 
-    return (clean_urls, skipped_count), where:
-      - clean_urls: only those lines that start with 'http' 
-        AND end in an image/video extension.
-      - skipped_count: how many lines were dropped (e.g. 'ytdl:dash').
-    """
-    clean = []
-    skipped = 0
-    for ln in lines:
-        if ln.startswith("http"):
-            # If it looks like a media link (common extensions), keep it.
-            if any(ln.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp",
-                                                       ".mp4", ".mov", ".gifv", ".webm"]):
-                clean.append(ln)
-            else:
-                # It's an HTTP link but with no known extension; include anyway.
-                clean.append(ln)
-        else:
-            # Non-http (e.g. "ytdl:dash") → skip
-            skipped += 1
-    return clean, skipped
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_posts:
-    st.subheader("Display User Posts (Inline Media)")
+    st.subheader("List Post URLs (Latest Media from a User)")
     with st.form(key="posts_form"):
         username_posts = st.text_input(
             "Instagram Username (for Posts)",
@@ -202,38 +172,29 @@ with tab_posts:
         max_posts = st.slider(
             "Max Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limit how many of the most recent posts to display."
+            help="Limit how many of the most recent posts to list URLs for."
         )
-        submit_posts = st.form_submit_button(label="Get & Display Posts")
+        submit_posts = st.form_submit_button(label="Get Post URLs")
 
     if submit_posts:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_posts:
-            st.error("Please enter a username to display their posts.")
+            st.error("Please enter a username to list their post URLs.")
         else:
             status_msg = st.info(f"⏳ Fetching post URLs for @{username_posts} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     username_posts, "posts", st.session_state.sessionid, max_posts
                 )
                 status_msg.empty()
 
-                # Filter out non-http lines (like ytdl:dash, etc.)
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines (e.g. ‘ytdl:dash’).")
-
-                if not clean_urls:
-                    st.warning("No valid media URLs returned. Check username/sessionid and try again.")
+                if not urls:
+                    st.warning("No post URLs were returned. Check the username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} posts for @{username_posts}:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} post URLs for @{username_posts}.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -246,41 +207,34 @@ with tab_posts:
 # Stories Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_stories:
-    st.subheader("Display User Stories (Inline Media)")
+    st.subheader("List Story URLs (Current Stories of a User)")
     with st.form(key="stories_form"):
         username_stories = st.text_input(
             "Instagram Username (for Stories)",
             placeholder="e.g., natgeo",
             key="username_stories"
         )
-        submit_stories = st.form_submit_button(label="Get & Display Stories")
+        submit_stories = st.form_submit_button(label="Get Story URLs")
 
     if submit_stories:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_stories:
-            st.error("Please enter a username to display their stories.")
+            st.error("Please enter a username to list their story URLs.")
         else:
             status_msg = st.info(f"⏳ Fetching story URLs for @{username_stories} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     username_stories, "stories", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
-
-                if not clean_urls:
-                    st.warning("No valid story URLs returned. Check username/sessionid and try again.")
+                if not urls:
+                    st.warning("No story URLs were returned. Check the username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} stories for @{username_stories}:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} story URLs for @{username_stories}.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -293,7 +247,7 @@ with tab_stories:
 # Reels Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_reels:
-    st.subheader("Display User Reels (Inline Media)")
+    st.subheader("List Reel URLs (Latest Reels from a User)")
     with st.form(key="reels_form"):
         username_reels = st.text_input(
             "Instagram Username (for Reels)",
@@ -303,36 +257,29 @@ with tab_reels:
         max_reels = st.slider(
             "Max Reels to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limit how many of the most recent reels to display."
+            help="Limit how many of the most recent reels to list URLs for."
         )
-        submit_reels = st.form_submit_button(label="Get & Display Reels")
+        submit_reels = st.form_submit_button(label="Get Reel URLs")
 
     if submit_reels:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_reels:
-            st.error("Please enter a username to display their reels.")
+            st.error("Please enter a username to list their reel URLs.")
         else:
             status_msg = st.info(f"⏳ Fetching reel URLs for @{username_reels} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     username_reels, "reels", st.session_state.sessionid, max_reels
                 )
                 status_msg.empty()
 
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
-
-                if not clean_urls:
-                    st.warning("No valid reel URLs returned. Check username/sessionid and try again.")
+                if not urls:
+                    st.warning("No reel URLs were returned. Check the username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} reels for @{username_reels}:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} reel URLs for @{username_reels}.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -345,15 +292,15 @@ with tab_reels:
 # Highlights Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_highlights:
-    st.subheader("Display Highlight Media (Inline)")
+    st.subheader("List Highlight URLs (Single Highlight Collection)")
     with st.form(key="highlights_form"):
         highlights_url = st.text_input(
             "Instagram Highlight URL",
             placeholder="e.g., https://www.instagram.com/stories/highlights/1234567890/",
-            help="Paste the full URL of the Instagram Highlight you want to display.",
+            help="Paste the full URL of the Instagram Highlight you want to list URLs for.",
             key="highlight_url"
         )
-        submit_highlights = st.form_submit_button(label="Get & Display Highlights")
+        submit_highlights = st.form_submit_button(label="Get Highlight URLs")
 
     if submit_highlights:
         if not st.session_state.sessionid:
@@ -363,24 +310,17 @@ with tab_highlights:
         else:
             status_msg = st.info(f"⏳ Fetching highlight URLs from: {highlights_url} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     highlights_url, "highlights", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
-
-                if not clean_urls:
-                    st.warning("No valid highlight URLs returned. Check URL/sessionid and try again.")
+                if not urls:
+                    st.warning("No highlight URLs were returned. Check the highlight URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} highlight media items:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} highlight URLs.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -393,7 +333,7 @@ with tab_highlights:
 # Tagged Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_tagged:
-    st.subheader("Display Tagged‐Post Media (Inline)")
+    st.subheader("List Tagged‐Post URLs (Media in which User Is Tagged)")
     with st.form(key="tagged_form"):
         username_tagged = st.text_input(
             "Instagram Username (for Tagged Posts)",
@@ -403,36 +343,29 @@ with tab_tagged:
         max_tagged = st.slider(
             "Max Tagged Posts to Fetch",
             min_value=1, max_value=100, value=20,
-            help="Limit how many of the most recent tagged‐post items to display."
+            help="Limit how many of the most recent tagged‐post URLs to list."
         )
-        submit_tagged = st.form_submit_button(label="Get & Display Tagged Posts")
+        submit_tagged = st.form_submit_button(label="Get Tagged URLs")
 
     if submit_tagged:
         if not st.session_state.sessionid:
             st.error("Cannot proceed. Please provide a sessionid above.")
         elif not username_tagged:
-            st.error("Please enter a username to display their tagged posts.")
+            st.error("Please enter a username to list their tagged‐post URLs.")
         else:
             status_msg = st.info(f"⏳ Fetching tagged-post URLs for @{username_tagged} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     username_tagged, "tagged", st.session_state.sessionid, max_tagged
                 )
                 status_msg.empty()
 
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
-
-                if not clean_urls:
-                    st.warning("No valid tagged‐post URLs returned. Check username/sessionid and try again.")
+                if not urls:
+                    st.warning("No tagged‐post URLs were returned. Check the username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} tagged‐post items for @{username_tagged}:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} tagged-post URLs for @{username_tagged}.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -445,7 +378,7 @@ with tab_tagged:
 # URL Input Tab
 # ──────────────────────────────────────────────────────────────────────────────
 with tab_url:
-    st.subheader("Display Media from Any Instagram URL (Inline)")
+    st.subheader("List URLs from Any Instagram URL")
     with st.form(key="url_form"):
         custom_url = st.text_input(
             "Instagram URL (post/reel/highlight/story)",
@@ -453,7 +386,7 @@ with tab_url:
             help="Paste any valid Instagram URL (post, story, reel, highlight, profile, etc.).",
             key="custom_url"
         )
-        submit_url = st.form_submit_button(label="Get & Display Media")
+        submit_url = st.form_submit_button(label="Get Media URLs")
 
     if submit_url:
         if not st.session_state.sessionid:
@@ -463,24 +396,17 @@ with tab_url:
         else:
             status_msg = st.info(f"⏳ Fetching media URLs from: {custom_url} ...")
             try:
-                all_lines = run_gallerydl_urls(
+                urls = run_gallerydl_urls(
                     custom_url, "url", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                clean_urls, skipped_count = filter_media_urls(all_lines)
-                if skipped_count > 0:
-                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
-
-                if not clean_urls:
-                    st.warning("No valid media URLs returned. Check URL/sessionid and try again.")
+                if not urls:
+                    st.warning("No media URLs were returned. Check the URL and sessionid, then try again.")
                 else:
-                    st.success(f"✅ Displaying {len(clean_urls)} items from the provided URL:")
-                    for url in clean_urls:
-                        if is_video_url(url):
-                            st.video(url)
-                        else:
-                            st.image(url, use_container_width=True)
+                    st.success(f"✅ Retrieved {len(urls)} media URLs from the provided URL.")
+                    for u in urls:
+                        st.text(u)
 
             except RuntimeError as e:
                 status_msg.empty()
