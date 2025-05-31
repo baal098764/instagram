@@ -165,7 +165,7 @@ st.set_page_config(
 st.sidebar.header("How to Obtain Your Instagram Session ID")
 st.sidebar.markdown(
     """
-    1. Install the **EditThisCookie** extension (Chrome/Chromium).  
+    1. Install the **EditThisCookie** extension [extenstion](https://www.editthiscookie.com/).  
     2. Log into [instagram.com](https://www.instagram.com).  
     3. Click the EditThisCookie icon.  
     4. Find the cookie named **`sessionid`**.  
