@@ -150,8 +150,27 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
 def is_video_url(url: str) -> bool:
     return any(ext in url.lower() for ext in [".mp4", ".mov", ".gifv", ".webm"])
 
+def display_media_grid(urls: list[str], n_cols: int = 3):
+    """
+    Given a list of URLs, lay them out in a grid with n_cols columns per row.
+    Uses st.columns. If a URL points to a video, use st.video; otherwise st.image.
+    """
+    if not urls:
+        return
+
+    # Break into chunks of size n_cols
+    for i in range(0, len(urls), n_cols):
+        row_urls = urls[i : i + n_cols]
+        cols = st.columns(len(row_urls))
+        for col, u in zip(cols, row_urls):
+            if is_video_url(u):
+                col.video(u)
+            else:
+                col.image(u, use_container_width=True)
+
+
 with tab_posts:
-    st.subheader("Display User Posts (Inline Media)")
+    st.subheader("Display User Posts (Grid View)")
     with st.form(key="posts_form"):
         username_posts = st.text_input(
             "Instagram Username (for Posts)",
@@ -182,11 +201,7 @@ with tab_posts:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} posts for @{username_posts}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -196,7 +211,7 @@ with tab_posts:
                 st.error(f"Unexpected error: {e}")
 
 with tab_stories:
-    st.subheader("Display User Stories (Inline Media)")
+    st.subheader("Display User Stories (Grid View)")
     with st.form(key="stories_form"):
         username_stories = st.text_input(
             "Instagram Username (for Stories)",
@@ -222,11 +237,7 @@ with tab_stories:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} stories for @{username_stories}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -236,7 +247,7 @@ with tab_stories:
                 st.error(f"Unexpected error: {e}")
 
 with tab_reels:
-    st.subheader("Display User Reels (Inline Media)")
+    st.subheader("Display User Reels (Grid View)")
     with st.form(key="reels_form"):
         username_reels = st.text_input(
             "Instagram Username (for Reels)",
@@ -267,11 +278,7 @@ with tab_reels:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} reels for @{username_reels}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -281,7 +288,7 @@ with tab_reels:
                 st.error(f"Unexpected error: {e}")
 
 with tab_highlights:
-    st.subheader("Display Highlight Media (Inline)")
+    st.subheader("Display Highlight Media (Grid View)")
     with st.form(key="highlights_form"):
         highlights_url = st.text_input(
             "Instagram Highlight URL",
@@ -308,11 +315,7 @@ with tab_highlights:
                     st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} highlight media items:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -322,7 +325,7 @@ with tab_highlights:
                 st.error(f"Unexpected error: {e}")
 
 with tab_tagged:
-    st.subheader("Display Tagged‐Post Media (Inline)")
+    st.subheader("Display Tagged‐Post Media (Grid View)")
     with st.form(key="tagged_form"):
         username_tagged = st.text_input(
             "Instagram Username (for Tagged Posts)",
@@ -353,11 +356,7 @@ with tab_tagged:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} tagged‐post items for @{username_tagged}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -367,7 +366,7 @@ with tab_tagged:
                 st.error(f"Unexpected error: {e}")
 
 with tab_url:
-    st.subheader("Display Media from Any Instagram URL (Inline)")
+    st.subheader("Display Media from Any Instagram URL (Grid View)")
     with st.form(key="url_form"):
         custom_url = st.text_input(
             "Instagram URL (post/reel/highlight/story)",
@@ -394,11 +393,7 @@ with tab_url:
                     st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
                     st.success(f"✅ Displaying {len(urls)} items from the provided URL:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
-                        else:
-                            st.image(u, use_container_width=True)
+                    display_media_grid(urls, n_cols=3)
 
             except RuntimeError as e:
                 status_msg.empty()
