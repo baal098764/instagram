@@ -82,9 +82,9 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
         # If gallery-dl fails, propagate an error
         raise RuntimeError(f"gallery-dl failed (exit {proc.returncode}):\n{stderr}")
 
-    # 5) Parse stdout: gallery-dl prints one URL per line
-    urls = [line.strip() for line in stdout.splitlines() if line.strip()]
-    return urls
+    # 5) Parse stdout: gallery-dl prints one URL (or directive) per line
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    return lines
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
@@ -164,6 +164,30 @@ def is_video_url(url: str) -> bool:
     """
     return any(ext in url.lower() for ext in [".mp4", ".mov", ".gifv", ".webm"])
 
+def filter_media_urls(lines: list[str]) -> tuple[list[str], int]:
+    """
+    Given a list of lines returned by run_gallerydl_urls, 
+    return (clean_urls, skipped_count), where:
+      - clean_urls: only those lines that start with 'http' 
+        AND end in an image/video extension.
+      - skipped_count: how many lines were dropped (e.g. 'ytdl:dash').
+    """
+    clean = []
+    skipped = 0
+    for ln in lines:
+        if ln.startswith("http"):
+            # If it looks like a media link (common extensions), keep it.
+            if any(ln.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp",
+                                                       ".mp4", ".mov", ".gifv", ".webm"]):
+                clean.append(ln)
+            else:
+                # It's an HTTP link but with no known extension; include anyway.
+                clean.append(ln)
+        else:
+            # Non-http (e.g. "ytdl:dash") → skip
+            skipped += 1
+    return clean, skipped
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Posts Tab
 # ──────────────────────────────────────────────────────────────────────────────
@@ -190,20 +214,26 @@ with tab_posts:
         else:
             status_msg = st.info(f"⏳ Fetching post URLs for @{username_posts} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     username_posts, "posts", st.session_state.sessionid, max_posts
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No post URLs returned. Check username/sessionid and try again.")
+                # Filter out non-http lines (like ytdl:dash, etc.)
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines (e.g. ‘ytdl:dash’).")
+
+                if not clean_urls:
+                    st.warning("No valid media URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} posts for @{username_posts}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} posts for @{username_posts}:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -233,20 +263,24 @@ with tab_stories:
         else:
             status_msg = st.info(f"⏳ Fetching story URLs for @{username_stories} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     username_stories, "stories", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No story URLs returned. Check username/sessionid and try again.")
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
+
+                if not clean_urls:
+                    st.warning("No valid story URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} stories for @{username_stories}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} stories for @{username_stories}:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -281,20 +315,24 @@ with tab_reels:
         else:
             status_msg = st.info(f"⏳ Fetching reel URLs for @{username_reels} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     username_reels, "reels", st.session_state.sessionid, max_reels
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No reel URLs returned. Check username/sessionid and try again.")
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
+
+                if not clean_urls:
+                    st.warning("No valid reel URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} reels for @{username_reels}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} reels for @{username_reels}:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -325,20 +363,24 @@ with tab_highlights:
         else:
             status_msg = st.info(f"⏳ Fetching highlight URLs from: {highlights_url} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     highlights_url, "highlights", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No highlight URLs returned. Check URL/sessionid and try again.")
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
+
+                if not clean_urls:
+                    st.warning("No valid highlight URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} highlight media items:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} highlight media items:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -373,20 +415,24 @@ with tab_tagged:
         else:
             status_msg = st.info(f"⏳ Fetching tagged-post URLs for @{username_tagged} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     username_tagged, "tagged", st.session_state.sessionid, max_tagged
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No tagged‐post URLs returned. Check username/sessionid and try again.")
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
+
+                if not clean_urls:
+                    st.warning("No valid tagged‐post URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} tagged‐post items for @{username_tagged}:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} tagged‐post items for @{username_tagged}:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
@@ -417,20 +463,24 @@ with tab_url:
         else:
             status_msg = st.info(f"⏳ Fetching media URLs from: {custom_url} ...")
             try:
-                urls = run_gallerydl_urls(
+                all_lines = run_gallerydl_urls(
                     custom_url, "url", st.session_state.sessionid
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No media URLs returned. Check URL/sessionid and try again.")
+                clean_urls, skipped_count = filter_media_urls(all_lines)
+                if skipped_count > 0:
+                    st.warning(f"⚠️ Skipped {skipped_count} non-media lines.")
+
+                if not clean_urls:
+                    st.warning("No valid media URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} items from the provided URL:")
-                    for u in urls:
-                        if is_video_url(u):
-                            st.video(u)
+                    st.success(f"✅ Displaying {len(clean_urls)} items from the provided URL:")
+                    for url in clean_urls:
+                        if is_video_url(url):
+                            st.video(url)
                         else:
-                            st.image(u, use_container_width=True)
+                            st.image(url, use_container_width=True)
 
             except RuntimeError as e:
                 status_msg.empty()
