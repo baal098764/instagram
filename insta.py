@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helper Functions for JSON‐based Gallery‐dl URL Extraction
+# Helper Functions for “URL‐only” Gallery‐dl Integration
 # ──────────────────────────────────────────────────────────────────────────────
 
 def write_gallerydl_config(sessionid: str) -> Path:
@@ -33,12 +33,12 @@ def write_gallerydl_config(sessionid: str) -> Path:
 
 def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int = 100) -> list[str]:
     """
-    Runs gallery-dl in JSON mode (--print-json) for the given Instagram identifier.
-    Parses each line of JSON output, extracts the direct media URL(s), and returns them.
+    Runs gallery-dl in “URL‐only” mode (with --get-url) for the given Instagram identifier.
+    Returns a list of URLs (one per media item).
 
     - identifier:
         • For "posts", "stories", "reels", "tagged": an Instagram username (without '@').
-        • For "highlights" or "url": a full Instagram URL (highlight, post, reel, story).
+        • For "highlights" or "url": a full Instagram URL (post/reel/highlight/story).
     - tab: one of ["posts", "stories", "reels", "highlights", "tagged", "url"]
     - sessionid: Instagram sessionid cookie string
     - max_items: only used when tab in ["posts", "reels", "tagged"]
@@ -56,15 +56,17 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
     elif tab == "tagged":
         target_url = f"https://www.instagram.com/{identifier}/tagged/"
     elif tab in ["highlights", "url"]:
-        target_url = identifier  # Full highlight or custom URL
+        # “highlights” and “url” expect a full URL string
+        target_url = identifier
     else:
         raise ValueError("Invalid tab: must be one of ['posts','stories','reels','highlights','tagged','url']")
 
-    # 3) Build gallery-dl command in JSON mode
+    # 3) Build gallery-dl command in “URL‐only” mode
     cmd = [
         "gallery-dl",
         "--config", str(cfg_path),
-        "--print-json"
+        "--get-url",
+        "--verbose"
     ]
     # Only apply a range filter for “posts”, “reels”, “tagged”
     if tab in ["posts", "reels", "tagged"]:
@@ -75,36 +77,22 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
     # 4) Execute gallery-dl
     proc = subprocess.run(cmd, capture_output=True, text=True)
     stdout, stderr = proc.stdout, proc.stderr
+
     if proc.returncode != 0:
+        # If gallery-dl fails, propagate an error
         raise RuntimeError(f"gallery-dl failed (exit {proc.returncode}):\n{stderr}")
 
-    # 5) Parse each JSON line and extract media URL(s)
-    urls = []
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            data = json.loads(line)
-            # Each JSON object may have a "url" field (for single-media items)
-            # or an "urls" list (for carousel posts). We handle both.
-            if "urls" in data and isinstance(data["urls"], list):
-                urls.extend(data["urls"])
-            elif "url" in data:
-                urls.append(data["url"])
-        except json.JSONDecodeError:
-            # Skip lines that aren't valid JSON
-            continue
-
+    # 5) Parse stdout: gallery-dl prints one URL per line
+    urls = [line.strip() for line in stdout.splitlines() if line.strip()]
     return urls
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Set page config with a custom favicon
+# Set page config with a custom favicon (browser‐tab icon)
 st.set_page_config(
-    page_title="Instagram Downloader (URL‐Only Mode)",
+    page_title="Instagram Downloader (URL Only)",
     page_icon="https://www.freepngimg.com/download/computer/68394-computer-instagram-icons-png-file-hd.png",
     layout="centered",
 )
@@ -172,7 +160,7 @@ tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs
 
 def is_video_url(url: str) -> bool:
     """
-    Rudimentary check: treat URLs containing video extensions as videos.
+    Naively check if a URL points to a video by inspecting known video extensions.
     """
     return any(ext in url.lower() for ext in [".mp4", ".mov", ".gifv", ".webm"])
 
@@ -207,11 +195,13 @@ with tab_posts:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No post URLs returned. Check username/sessionid and try again.")
+                # Filter for CDN URLs only
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} posts for @{username_posts}:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} posts for @{username_posts}:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -250,11 +240,12 @@ with tab_stories:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No story URLs returned. Check username/sessionid and try again.")
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} stories for @{username_stories}:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} stories for @{username_stories}:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -298,11 +289,12 @@ with tab_reels:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No reel URLs returned. Check username/sessionid and try again.")
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} reels for @{username_reels}:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} reels for @{username_reels}:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -342,11 +334,12 @@ with tab_highlights:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No highlight URLs returned. Check URL/sessionid and try again.")
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} highlight media items:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} highlight media items:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -390,11 +383,12 @@ with tab_tagged:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No tagged‐post URLs returned. Check username/sessionid and try again.")
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} tagged‐post items for @{username_tagged}:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} tagged‐post items for @{username_tagged}:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -434,11 +428,12 @@ with tab_url:
                 )
                 status_msg.empty()
 
-                if not urls:
-                    st.warning("No media URLs returned. Check URL/sessionid and try again.")
+                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
+                if not filtered_urls:
+                    st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(urls)} items from the provided URL:")
-                    for u in urls:
+                    st.success(f"✅ Displaying {len(filtered_urls)} items from the provided URL:")
+                    for u in filtered_urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
