@@ -34,7 +34,7 @@ def write_gallerydl_config(sessionid: str) -> Path:
 def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int = 100) -> list[str]:
     """
     Runs gallery-dl in “URL‐only” mode (with --get-url) for the given Instagram identifier.
-    Returns a list of URLs (one per media item).
+    Returns a list of direct media URLs (one per media item) that contain 'cdninstagram.com'.
 
     - identifier:
         • For "posts", "stories", "reels", "tagged": an Instagram username (without '@').
@@ -56,7 +56,6 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
     elif tab == "tagged":
         target_url = f"https://www.instagram.com/{identifier}/tagged/"
     elif tab in ["highlights", "url"]:
-        # “highlights” and “url” expect a full URL string
         target_url = identifier
     else:
         raise ValueError("Invalid tab: must be one of ['posts','stories','reels','highlights','tagged','url']")
@@ -68,10 +67,8 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
         "--get-url",
         "--verbose"
     ]
-    # Only apply a range filter for “posts”, “reels”, “tagged”
     if tab in ["posts", "reels", "tagged"]:
         cmd += ["--range", f"0-{max_items}"]
-
     cmd.append(target_url)
 
     # 4) Execute gallery-dl
@@ -79,27 +76,27 @@ def run_gallerydl_urls(identifier: str, tab: str, sessionid: str, max_items: int
     stdout, stderr = proc.stdout, proc.stderr
 
     if proc.returncode != 0:
-        # If gallery-dl fails, propagate an error
         raise RuntimeError(f"gallery-dl failed (exit {proc.returncode}):\n{stderr}")
 
-    # 5) Parse stdout: gallery-dl prints one URL per line
-    urls = [line.strip() for line in stdout.splitlines() if line.strip()]
+    # 5) Parse stdout to extract only 'cdninstagram.com' URLs
+    urls = []
+    for line in stdout.splitlines():
+        text = line.strip()
+        if text.startswith("|"):
+            text = text.lstrip("| ").strip()
+        if text.startswith("http") and "cdninstagram.com" in text:
+            urls.append(text)
     return urls
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Set page config with a custom favicon (browser‐tab icon)
 st.set_page_config(
     page_title="Instagram Downloader (URL Only)",
     page_icon="https://www.freepngimg.com/download/computer/68394-computer-instagram-icons-png-file-hd.png",
     layout="centered",
 )
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Sidebar: Instructions & Disclaimer
-# ──────────────────────────────────────────────────────────────────────────────
 
 st.sidebar.header("How to Obtain Your Instagram Session ID")
 st.sidebar.markdown(
@@ -126,13 +123,8 @@ st.sidebar.markdown(
     """
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Main App Content
-# ──────────────────────────────────────────────────────────────────────────────
-
 st.title("📸 Instagram Downloader (URL‐Only Mode)")
 
-# Store sessionid in session state
 if "sessionid" not in st.session_state:
     st.session_state.sessionid = ""
 
@@ -151,22 +143,13 @@ with st.expander("🔑 Enter your Instagram sessionid"):
 
 st.markdown("---")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Tabs: Posts, Stories, Reels, Highlights, Tagged Posts, URL Input
-# ──────────────────────────────────────────────────────────────────────────────
 tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs(
     ["🖼️ Posts", "📖 Stories", "🎞️ Reels", "✨ Highlights", "🏷️ Tagged Posts", "🔗 URL Input"]
 )
 
 def is_video_url(url: str) -> bool:
-    """
-    Naively check if a URL points to a video by inspecting known video extensions.
-    """
     return any(ext in url.lower() for ext in [".mp4", ".mov", ".gifv", ".webm"])
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Posts Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_posts:
     st.subheader("Display User Posts (Inline Media)")
     with st.form(key="posts_form"):
@@ -195,13 +178,11 @@ with tab_posts:
                 )
                 status_msg.empty()
 
-                # Filter for CDN URLs only
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} posts for @{username_posts}:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} posts for @{username_posts}:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -214,9 +195,6 @@ with tab_posts:
                 status_msg.empty()
                 st.error(f"Unexpected error: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Stories Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_stories:
     st.subheader("Display User Stories (Inline Media)")
     with st.form(key="stories_form"):
@@ -240,12 +218,11 @@ with tab_stories:
                 )
                 status_msg.empty()
 
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} stories for @{username_stories}:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} stories for @{username_stories}:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -258,9 +235,6 @@ with tab_stories:
                 status_msg.empty()
                 st.error(f"Unexpected error: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Reels Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_reels:
     st.subheader("Display User Reels (Inline Media)")
     with st.form(key="reels_form"):
@@ -289,12 +263,11 @@ with tab_reels:
                 )
                 status_msg.empty()
 
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} reels for @{username_reels}:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} reels for @{username_reels}:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -307,9 +280,6 @@ with tab_reels:
                 status_msg.empty()
                 st.error(f"Unexpected error: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Highlights Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_highlights:
     st.subheader("Display Highlight Media (Inline)")
     with st.form(key="highlights_form"):
@@ -334,12 +304,11 @@ with tab_highlights:
                 )
                 status_msg.empty()
 
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} highlight media items:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} highlight media items:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -352,9 +321,6 @@ with tab_highlights:
                 status_msg.empty()
                 st.error(f"Unexpected error: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Tagged Posts Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_tagged:
     st.subheader("Display Tagged‐Post Media (Inline)")
     with st.form(key="tagged_form"):
@@ -383,12 +349,11 @@ with tab_tagged:
                 )
                 status_msg.empty()
 
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check username/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} tagged‐post items for @{username_tagged}:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} tagged‐post items for @{username_tagged}:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
@@ -401,9 +366,6 @@ with tab_tagged:
                 status_msg.empty()
                 st.error(f"Unexpected error: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# URL Input Tab
-# ──────────────────────────────────────────────────────────────────────────────
 with tab_url:
     st.subheader("Display Media from Any Instagram URL (Inline)")
     with st.form(key="url_form"):
@@ -428,12 +390,11 @@ with tab_url:
                 )
                 status_msg.empty()
 
-                filtered_urls = [u for u in urls if "cdninstagram.com" in u]
-                if not filtered_urls:
+                if not urls:
                     st.warning("No direct CDN URLs returned. Check URL/sessionid and try again.")
                 else:
-                    st.success(f"✅ Displaying {len(filtered_urls)} items from the provided URL:")
-                    for u in filtered_urls:
+                    st.success(f"✅ Displaying {len(urls)} items from the provided URL:")
+                    for u in urls:
                         if is_video_url(u):
                             st.video(u)
                         else:
