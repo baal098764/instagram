@@ -119,10 +119,10 @@ def create_zip_buffer(file_paths: list[Path]) -> BytesIO:
 # Streamlit App
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Add custom favicon for browser tab
+# Set page config with a custom favicon (tab icon)
 st.set_page_config(
     page_title="Instagram Downloader",
-    page_icon="https://example.com/path/to/your-favicon.png",  # Replace with your icon URL or file path
+    page_icon="https://www.freepngimg.com/download/computer/68394-computer-instagram-icons-png-file-hd.png",
     layout="centered",
 )
 
@@ -185,7 +185,7 @@ st.markdown("---")
 # ──────────────────────────────────────────────────────────────────────────────
 
 tab_posts, tab_stories, tab_reels, tab_highlights, tab_tagged, tab_url = st.tabs(
-    ["Posts", "Stories", "Reels", "Highlights", "Tagged Posts", "URL Input"]
+    ["🖼️ Posts", "📖 Stories", "🎞️ Reels", "✨ Highlights", "🏷️ Tagged Posts", "🔗 URL Input"]
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
