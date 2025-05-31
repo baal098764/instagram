@@ -132,7 +132,7 @@ def is_video_file(file_path: Path) -> bool:
 def display_media_grid_from_paths(file_paths: list[Path], n_cols: int = 3):
     """
     Given a list of local Paths, display them in a grid of n_cols columns per row.
-    Uses st.columns() and calls st.image(...) or st.video(...) with use_container_width=True.
+    Uses st.columns() and calls st.image(...) or st.video(...) without width arguments.
     """
     if not file_paths:
         return
@@ -142,7 +142,7 @@ def display_media_grid_from_paths(file_paths: list[Path], n_cols: int = 3):
         for col, path in zip(cols, chunk):
             try:
                 if is_video_file(path):
-                    col.video(str(path), format="video/mp4", use_container_width=True)
+                    col.video(str(path), format="video/mp4")
                 else:
                     col.image(str(path), use_container_width=True)
             except Exception as e:
