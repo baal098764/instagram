@@ -122,7 +122,7 @@ def create_zip_buffer(file_paths: list[Path]) -> BytesIO:
 # Here is the only change: add page_icon to set the favicon
 st.set_page_config(
     page_title="Instagram Downloader",
-    page_icon="https://th.bing.com/th/id/OIP.V-PgdqPuuytmfTJbQl5xegHaEK?rs=1&pid=ImgDetMain",  # <- replace with your actual icon URL
+    page_icon="https://th.bing.com/th/id/OIP.jPmHyBfNRs_TTPat6HyprQHaHa?rs=1&pid=ImgDetMain",  # <- replace with your actual icon URL
     layout="centered",
 )
 
