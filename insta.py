@@ -264,20 +264,7 @@ with tab_posts:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_posts}_posts_media.zip"
                 st.download_button(
@@ -287,7 +274,7 @@ with tab_posts:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Posts"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -341,20 +328,7 @@ with tab_stories:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_stories}_stories_media.zip"
                 st.download_button(
@@ -364,7 +338,7 @@ with tab_stories:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Stories"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -423,20 +397,7 @@ with tab_reels:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_reels}_reels_media.zip"
                 st.download_button(
@@ -446,7 +407,7 @@ with tab_reels:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Reels"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -501,20 +462,7 @@ with tab_highlights:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"highlight_{hash(highlights_url)}_media.zip"
                 st.download_button(
@@ -524,7 +472,7 @@ with tab_highlights:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Highlights"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -583,20 +531,7 @@ with tab_tagged:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"{username_tagged}_tagged_media.zip"
                 st.download_button(
@@ -606,7 +541,7 @@ with tab_tagged:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded Tagged Posts"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
@@ -661,20 +596,7 @@ with tab_url:
                 # 1) Display media grid
                 display_media_grid_from_paths(media_files, n_cols=3)
 
-                # 2) Provide individual Download buttons
-                st.markdown("#### 📂 Download Options")
-                for file_path in media_files:
-                    file_name = file_path.name
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
-                    st.download_button(
-                        label=f"Download {file_name}",
-                        data=file_bytes,
-                        file_name=file_name,
-                        mime="application/octet-stream"
-                    )
-
-                # 3) ZIP download for convenience
+                # 2) ZIP download for convenience
                 zip_buffer = create_zip_buffer(media_files)
                 zip_name = f"url_{hash(custom_url)}_media.zip"
                 st.download_button(
@@ -684,7 +606,7 @@ with tab_url:
                     mime="application/zip"
                 )
 
-                # 4) “Clear Media” button to remove files from server storage
+                # 3) “Clear Media” button to remove files from server storage
                 if st.button("🗑️ Clear Downloaded URL Media"):
                     success = clear_downloaded_folder(download_dir)
                     if success:
